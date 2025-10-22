@@ -1,189 +1,156 @@
-# Robin Logistics Environment — Contestant Guide
+# Beltone Hackathon - MDVRP Solver
 
-## Install or Upgrade
+**Team: Vibe Coders**
+Multi-Depot Vehicle Routing Problem solver for Beltone AI Hackathon
 
-Install:
+## 📊 Current Performance
+
+**Submission File:** `VibeCoders_solver_1.py`
+
+- ✅ **Fulfillment:** 78-88% (39-44 out of 50 orders)
+- ✅ **Cost:** ~$7,000
+- ✅ **Distance:** 240-290 km
+- ✅ **Reliability:** 100% validation success, 92-100% execution
+
+## 🚀 Quick Start
+
+### Installation
+
 ```bash
 pip install robin-logistics-env
 ```
 
-Upgrade to latest version:
+### Test Solver
+
 ```bash
-pip install --upgrade robin-logistics-env
+python test_solver.py
 ```
 
-## Available Solvers
+### Run Dashboard (Visualization)
 
-- `solver.py` — **my_solver**: Basic BFS-based routing solver (recommended starting point)
-- `manual_assignments_dashboard.py` — **manual_assignments_solver_main**: Manual route assignment solver
-
-## Quick Start
-
-### 1. Test Your Setup
 ```bash
-python test_all.py
-```
-
-### 2. Basic Solver (Recommended)
-```bash
-# Run headless
-python run_headless.py
-
-# Run dashboard
 python run_dashboard.py
 ```
 
-### 2. Manual Assignments Solver
-```bash
+Interactive Streamlit dashboard with:
+- Road network and order visualization
+- Route testing and validation
+- Real-time performance metrics
 
-python -c "
+## 📁 Project Structure
+
+```
+.
+├── VibeCoders_solver_1.py     # 🏆 Main submission solver (78-88% fulfillment)
+├── test_solver.py              # Test script for validation
+├── run_dashboard.py            # Interactive visualization dashboard
+├── solver.py                   # Original skeleton/template
+│
+├── README.md                   # This file
+├── API_REFERENCE.md            # Complete API documentation
+├── claude.md                   # Development guide with research insights
+├── requirements.txt            # Python dependencies
+│
+├── studies/                    # Research papers
+│   ├── dp-cp19.pdf
+│   └── Thebalancingtravelingsalesmanproblem_Submission.pdf
+│
+└── Hackathon Document.docx     # Competition rules and requirements
+```
+
+## 🎯 Algorithm Overview
+
+**Strategy:** Multi-order greedy assignment with capacity-aware routing
+
+**Key Features:**
+1. **BFS Pathfinding** - Shortest path on road network
+2. **Multi-order Packing** - 3-5 orders per vehicle based on type
+3. **Two-pass Assignment** - Primary + mop-up passes
+4. **Three-level Fallback** - Full list → Half → Single order
+5. **Capacity & Inventory Validation** - Strict constraint checking
+6. **Nearest Neighbor Optimization** - Delivery sequence optimization
+
+## 📈 Submission
+
+**Portal:** https://beltone-ai-hackathon.com/
+**Team:** Vibe Coders
+**File:** `VibeCoders_solver_1.py`
+
+### Scoring Formula
+```
+Score = Cost + (Benchmark × (100 - Fulfillment%))
+```
+
+**Strategy:** Maximize fulfillment first, then minimize cost.
+
+## 🔬 Research Insights
+
+This solver incorporates insights from academic TSP research:
+
+- **Heuristic over Optimal:** Fast approximations beat expensive exact solutions
+- **Fallback Logic:** Try multiple configurations to maximize success rate
+- **Capacity Safety:** Conservative margins prevent route failures
+- **Nearest Neighbor:** O(n²) routing optimization
+
+**Key Learning:** Simple "try-and-fail" approaches empirically outperform complex pre-filtering strategies in this constrained environment.
+
+See `claude.md` for detailed research analysis and development notes.
+
+## 📚 Documentation
+
+- **API_REFERENCE.md** - Complete environment API
+- **claude.md** - Research insights and development guide
+- **Hackathon Document.docx** - Competition rules
+
+## 🛠️ Development
+
+### Running Tests
+
+```python
 from robin_logistics import LogisticsEnvironment
-from manual_assignments_dashboard import manual_assignments_solver_main
+from VibeCoders_solver_1 import solver
+
 env = LogisticsEnvironment()
-env.set_solver(manual_assignments_solver_main)
-env.launch_dashboard()
-"
+result = solver(env)
+
+# Validate
+is_valid, msg, details = env.validate_solution_complete(result)
+print(f"Valid: {is_valid}")
+
+# Execute
+success, exec_msg = env.execute_solution(result)
+print(f"Execution: {exec_msg}")
+
+# Get stats
+stats = env.get_solution_statistics(result, details)
+print(f"Cost: ${stats['total_cost']:,.2f}")
 ```
 
-#### Example ASSIGNMENTS (steps-only)
-```python
-ASSIGNMENTS = [
-    {
-        'vehicle_id': 'V-1',
-        'steps': [
-            {'node_id': 1, 'pickups': [], 'deliveries': [], 'unloads': []},
-            {'node_id': 5, 'pickups': [{'warehouse_id': 'WH-1', 'sku_id': 'Light_Item', 'quantity': 30}], 'deliveries': [], 'unloads': []},
-            {'node_id': 10, 'pickups': [], 'deliveries': [{'order_id': 'ORD-1', 'sku_id': 'Light_Item', 'quantity': 30}], 'unloads': []},
-            {'node_id': 1, 'pickups': [], 'deliveries': [], 'unloads': []},
-        ]
-    }
-]
-```
-
-## ⚙️ Configuration & Custom Scenarios
-
-### Build Custom Scenarios
-```python
-# Example: Create focused test scenario
-custom_config = {
-    'random_seed': 42,                    # Reproducible results
-    'num_orders': 15,                     # Smaller for testing
-    'sku_percentages': [50, 30, 20],      # More light items
-    
-    'distance_control': {
-        'radius_km': 10,                  # Compact area
-        'density_strategy': 'clustered',   # Orders near warehouses
-        'clustering_factor': 0.9,         # Highly clustered
-    },
-    
-    'warehouse_configs': [
-        {
-            'vehicle_counts': {'LightVan': 2, 'MediumTruck': 1},
-            'sku_inventory_percentages': [80, 60, 40]  # WH-1 has more stock
-        },
-        {
-            'vehicle_counts': {'LightVan': 1, 'HeavyTruck': 1},
-            'sku_inventory_percentages': [20, 40, 60]  # WH-2 complements WH-1
-        }
-    ]
-}
-
-env.generate_scenario_from_config(custom_config)
-```
-
-### Configuration Options
-- **Core**: `random_seed`, `num_orders`, `sku_percentages`
-- **Geographic**: `radius_km`, `density_strategy` ('uniform'/'clustered'/'ring'), `clustering_factor`
-- **Fleet**: `vehicle_counts` per warehouse (LightVan/MediumTruck/HeavyTruck)
-- **Inventory**: `sku_inventory_percentages` (% of total demand per SKU)
-
-### Scenario Export/Import
-```python
-# Export with all configuration
-scenario = env.export_scenario()
-
-# Save to disk
-import json
-with open('scenario.json', 'w') as f:
-    json.dump(scenario, f, indent=2)
-
-# Load later
-with open('scenario.json', 'r') as f:
-    scenario = json.load(f)
-env.load_scenario(scenario)
-
-# Access generation config
-gen_cfg = env.get_stored_generation_config()
-print(f"Used clustering: {gen_cfg['distance_control']['clustering_factor']}")
-```
-
-## File Structure
-
-- `solver.py` — Main contestant solver with BFS pathfinding
-- `run_headless.py` — Headless execution runner
-- `run_dashboard.py` — Dashboard launcher
-- `run_with_scenario.py` — Run with saved scenario data
-- `manual_assignments_dashboard.py` — Alternative solver approach
-- `API_REFERENCE.md` — Complete API documentation
-
-## Solver Entry Points
-
-- **my_solver(env)** — Main solver function in solver.py
-- **manual_assignments_solver_main(env)** — Manual assignments solver
-
-## Notes
-
-- The dashboard runner uses `env.launch_dashboard()` for proper integration
-- Headless validates, executes, and prints basic statistics
-- Both modes use the same centralized validation, execution, and metrics paths (identical logic)
-- Baseline reset ensures headless runs do not deplete inventory for dashboard runs
-- Reproducibility: using the same `random_seed` yields the same scenario in both modes
-- All solvers automatically work in both dashboard and headless modes
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Import Errors**: Make sure you're running from the `contestant` directory
-2. **Solver Not Found**: Verify your solver function is named correctly (e.g., `my_solver`)
-3. **Dashboard Won't Launch**: Check if port 8501 is available, or use a different port
-
-### State Management
-
-The environment automatically performs a true reset between dashboard runs (restores baseline warehouse inventories and clears delivered items). You can also reset manually:
+### Key Environment Methods
 
 ```python
-# Reset all state (inventory, vehicles, orders)
-env.reset_all_state()
+# Data access
+env.get_all_order_ids()
+env.get_available_vehicles()
+env.get_warehouse_inventory(warehouse_id)
+env.get_order_requirements(order_id)
 
-# Complete reset with new scenario
-env.complete_reset(seed=42)
+# Network & distance
+env.get_road_network_data()
+env.get_distance(node1, node2)
 
-# Reset only vehicle states
-env._reset_vehicle_states()
+# Validation
+env.validate_solution_complete(solution)
+env.execute_solution(solution)
+env.get_solution_statistics(solution, details)
 ```
 
-**When to use:**
-- After running headless mode before dashboard
-- When switching between different test scenarios
-- If inventory appears depleted from previous runs
-- For reproducible testing with specific seeds
+## 📞 Contact
 
-### Testing
+**Package:** https://github.com/RobinDataScience/Logistics-Env
+**Contact:** mario.salama@beltoneholding.com
+**Version:** 3.3.0
 
-Run the test suite to verify your setup:
-```bash
-python test_all.py
-```
+## 📄 License
 
-This will check:
-- All imports work correctly
-- Environment can be created
-- Solver functions can be called
-- Basic functionality is working
-
-### Getting Help
-
-- Check `API_REFERENCE.md` for complete API documentation
-- Review the solver examples in `solver.py` and `manual_assignments_dashboard.py`
-- Ensure you're using the latest version: `pip install --upgrade robin-logistics-env`
+Beltone AI Hackathon 2024
