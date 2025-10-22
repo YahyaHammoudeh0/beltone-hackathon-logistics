@@ -28,11 +28,11 @@ if __name__ == '__main__':
         print(f"Total Cost: ${stats.get('total_cost', 0):,.2f}")
         print(f"Total Distance: {stats.get('total_distance', 0):,.2f} km")
         print(f"Vehicles Used: {len(result['routes'])}/12")
-        print(f"\nOrders Fulfilled: {fulfillment.get('fulfilled_orders', 0)}/{fulfillment.get('total_orders', 0)}")
-        print(f"Fulfillment Rate: {fulfillment.get('fulfillment_rate', 0):.1f}%")
+        print(f"\nOrders Fulfilled: {fulfillment.get('fully_fulfilled_orders', 0)}/{fulfillment.get('total_orders', 0)}")
+        print(f"Fulfillment Rate: {fulfillment.get('average_fulfillment_rate', 0):.1f}%")
 
         # Estimate score (without knowing benchmark)
-        fulfillment_rate = fulfillment.get('fulfillment_rate', 0)
+        fulfillment_rate = fulfillment.get('average_fulfillment_rate', 0)
         unfulfilled_penalty_factor = 100 - fulfillment_rate
         total_cost = stats.get('total_cost', 0)
 
