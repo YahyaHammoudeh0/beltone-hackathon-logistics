@@ -22,9 +22,10 @@ import time
 # ROBUST PATHFINDING
 # ============================================================================
 
-def find_shortest_path_robust(start_node: int, end_node: int, adjacency_list: Dict, max_length: int = 1000) -> Optional[List[int]]:
+def find_shortest_path_robust(start_node: int, end_node: int, adjacency_list: Dict, max_length: int = 2000) -> Optional[List[int]]:
     """
-    More robust BFS pathfinding with higher limits and better error handling.
+    More robust BFS pathfinding with 2000-node limit and better error handling.
+    Increased from 1000 to handle larger/more complex scenarios.
     """
     if start_node == end_node:
         return [start_node]
@@ -151,13 +152,13 @@ def create_single_order_route(env, vehicle_id: str, order_id: str, adjacency_lis
         if order_node is None:
             return None
 
-        # Find path to order with robust pathfinding
-        path_to_order = find_shortest_path_robust(home_node, order_node, adjacency_list, max_length=1000)
+        # Find path to order with robust pathfinding (2000-node limit)
+        path_to_order = find_shortest_path_robust(home_node, order_node, adjacency_list, max_length=2000)
         if not path_to_order:
             return None
 
         # Find path back home
-        path_home = find_shortest_path_robust(order_node, home_node, adjacency_list, max_length=1000)
+        path_home = find_shortest_path_robust(order_node, home_node, adjacency_list, max_length=2000)
         if not path_home:
             return None
 
@@ -266,7 +267,7 @@ def create_multi_order_route(env, vehicle_id: str, order_ids: List[str], adjacen
             if order_node is None:
                 return None
 
-            path = find_shortest_path_robust(current_node, order_node, adjacency_list, max_length=1000)
+            path = find_shortest_path_robust(current_node, order_node, adjacency_list, max_length=2000)
             if not path:
                 return None
 
@@ -283,7 +284,7 @@ def create_multi_order_route(env, vehicle_id: str, order_ids: List[str], adjacen
             current_node = order_node
 
         # Return home
-        path_home = find_shortest_path_robust(current_node, home_node, adjacency_list, max_length=1000)
+        path_home = find_shortest_path_robust(current_node, home_node, adjacency_list, max_length=2000)
         if not path_home:
             return None
 

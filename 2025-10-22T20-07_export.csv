@@ -1,5 +1,0 @@
-﻿,scenario,team_name,solver_id,orders_fulfillment_ratio,total_cost,total_distance,solution_runtime_sec,unique_orders_served
-0,1,VibeCoders_solver_3.py,3,1,2188.6910010331276,17.462979405157327,17.858,18
-1,2,VibeCoders_solver_3.py,3,0.9,3439.534761666578,35.838880148588565,157.976,27
-2,4,VibeCoders_solver_3.py,3,0.1111111111111111,596.4467192023033,148.2233596011516,4.894,3
-3,3,VibeCoders_solver_3.py,3,0,0,0,2.791,0
