@@ -1,27 +1,24 @@
 #!/usr/bin/env python3
 """
-Vibe Coders - Beltone AI Hackathon Submission
-Multi-Depot Vehicle Routing Problem Solver
-
-Strategy: Greedy multi-order assignment with capacity-aware routing
+Vibe Coders - Final Submission: 100% Fulfillment Target
+Improved multi-order routing with robust error handling
 """
 from typing import Dict, List, Optional, Tuple, Set
 from collections import deque
 
 
-def find_shortest_path(start_node: int, end_node: int, adjacency_list: Dict, max_length: int = 500) -> Optional[List[int]]:
-    """BFS shortest path finding."""
+def find_shortest_path(start_node: int, end_node: int, adjacency_list: Dict, max_nodes: int = 500) -> Optional[List[int]]:
+    """BFS pathfinding with node limit."""
     if start_node == end_node:
         return [start_node]
 
     queue = deque([(start_node, [start_node])])
     visited = {start_node}
+    nodes_explored = 0
 
-    while queue:
+    while queue and nodes_explored < max_nodes:
         current, path = queue.popleft()
-
-        if len(path) >= max_length:
-            continue
+        nodes_explored += 1
 
         for neighbor in adjacency_list.get(current, []):
             neighbor_int = int(neighbor) if hasattr(neighbor, '__int__') else neighbor
@@ -39,7 +36,7 @@ def find_shortest_path(start_node: int, end_node: int, adjacency_list: Dict, max
 
 
 def calculate_order_size(env, order_id: str) -> Tuple[float, float]:
-    """Calculate total weight and volume for an order."""
+    """Calculate weight and volume."""
     requirements = env.get_order_requirements(order_id)
     total_weight = 0.0
     total_volume = 0.0
@@ -53,7 +50,7 @@ def calculate_order_size(env, order_id: str) -> Tuple[float, float]:
 
 
 def can_fit_orders(env, vehicle_id: str, order_ids: List[str]) -> bool:
-    """Check if orders fit in vehicle capacity."""
+    """Check capacity with safety margin."""
     vehicle = env.get_vehicle_by_id(vehicle_id)
     if not vehicle:
         return False
@@ -66,12 +63,13 @@ def can_fit_orders(env, vehicle_id: str, order_ids: List[str]) -> bool:
         total_weight += weight
         total_volume += volume
 
-    return (total_weight <= vehicle.capacity_weight and
-            total_volume <= vehicle.capacity_volume)
+    # 10% safety margin
+    return (total_weight <= vehicle.capacity_weight * 0.9 and
+            total_volume <= vehicle.capacity_volume * 0.9)
 
 
-def check_warehouse_inventory(env, warehouse_id: str, order_ids: List[str]) -> bool:
-    """Check if warehouse has inventory for all orders."""
+def check_inventory(env, warehouse_id: str, order_ids: List[str]) -> bool:
+    """Verify inventory availability."""
     total_needs = {}
     for order_id in order_ids:
         requirements = env.get_order_requirements(order_id)
@@ -86,8 +84,8 @@ def check_warehouse_inventory(env, warehouse_id: str, order_ids: List[str]) -> b
     return True
 
 
-def optimize_delivery_order(env, warehouse_node: int, order_ids: List[str]) -> List[str]:
-    """Optimize order sequence using nearest neighbor."""
+def optimize_delivery_sequence(env, warehouse_node: int, order_ids: List[str]) -> List[str]:
+    """Order deliveries using nearest neighbor."""
     if len(order_ids) <= 1:
         return order_ids
 
@@ -114,14 +112,42 @@ def optimize_delivery_order(env, warehouse_node: int, order_ids: List[str]) -> L
             unvisited.remove(nearest)
             current = env.get_order_location(nearest)
         else:
+            # Fallback: add remaining in original order
             route.extend(list(unvisited))
             break
 
     return route
 
 
+def estimate_route_distance(env, warehouse_node: int, order_nodes: List[int]) -> float:
+    """Estimate total route distance."""
+    if not order_nodes:
+        return 0
+
+    total = 0
+    current = warehouse_node
+
+    # To each order
+    for order_node in order_nodes:
+        try:
+            dist = env.get_distance(current, order_node)
+            total += dist if dist else 50  # Assume 50km if unknown
+            current = order_node
+        except:
+            total += 50
+
+    # Back to warehouse
+    try:
+        dist = env.get_distance(current, warehouse_node)
+        total += dist if dist else 50
+    except:
+        total += 50
+
+    return total
+
+
 def create_route(env, vehicle_id: str, order_ids: List[str], adjacency_list: Dict) -> Optional[Dict]:
-    """Create multi-order route for a vehicle."""
+    """Create multi-order route with distance checking."""
     if not order_ids:
         return None
 
@@ -135,28 +161,39 @@ def create_route(env, vehicle_id: str, order_ids: List[str], adjacency_list: Dic
 
     home_node = warehouse.location.id
 
-    # Collect all required items
+    # Check capacity
+    if not can_fit_orders(env, vehicle_id, order_ids):
+        return None
+
+    # Check inventory
+    if not check_inventory(env, vehicle.home_warehouse_id, order_ids):
+        return None
+
+    # Optimize order sequence
+    optimized_orders = optimize_delivery_sequence(env, home_node, order_ids)
+
+    # Estimate distance before creating route
+    order_nodes = [env.get_order_location(oid) for oid in optimized_orders]
+    estimated_distance = estimate_route_distance(env, home_node, order_nodes)
+
+    # Check against vehicle max distance (with 20% buffer for actual vs estimated)
+    if estimated_distance > vehicle.max_distance * 0.8:
+        return None
+
+    # Build route
+    steps = []
     all_items = {}
     for order_id in order_ids:
         requirements = env.get_order_requirements(order_id)
         for sku_id, qty in requirements.items():
             all_items[sku_id] = all_items.get(sku_id, 0) + qty
 
-    # Check inventory
-    if not check_warehouse_inventory(env, vehicle.home_warehouse_id, order_ids):
-        return None
-
-    # Optimize order sequence
-    optimized_orders = optimize_delivery_order(env, home_node, order_ids)
-
-    steps = []
-
-    # Step 1: Pickup at warehouse
+    # Pickup at warehouse
     pickups = [{'warehouse_id': vehicle.home_warehouse_id, 'sku_id': sid, 'quantity': q}
                for sid, q in all_items.items()]
     steps.append({'node_id': home_node, 'pickups': pickups, 'deliveries': [], 'unloads': []})
 
-    # Steps 2-N: Visit each order
+    # Visit each order
     current_node = home_node
     for order_id in optimized_orders:
         order_node = env.get_order_location(order_id)
@@ -164,7 +201,7 @@ def create_route(env, vehicle_id: str, order_ids: List[str], adjacency_list: Dic
             return None
 
         # Path to order
-        path = find_shortest_path(current_node, order_node, adjacency_list)
+        path = find_shortest_path(current_node, order_node, adjacency_list, max_nodes=500)
         if not path:
             return None
 
@@ -172,7 +209,7 @@ def create_route(env, vehicle_id: str, order_ids: List[str], adjacency_list: Dic
         for i in range(1, len(path) - 1):
             steps.append({'node_id': path[i], 'pickups': [], 'deliveries': [], 'unloads': []})
 
-        # Deliver all SKUs for this order at once
+        # Deliver
         requirements = env.get_order_requirements(order_id)
         deliveries = [{'order_id': order_id, 'sku_id': sid, 'quantity': q}
                      for sid, q in requirements.items()]
@@ -181,7 +218,7 @@ def create_route(env, vehicle_id: str, order_ids: List[str], adjacency_list: Dic
         current_node = order_node
 
     # Return home
-    path_home = find_shortest_path(current_node, home_node, adjacency_list)
+    path_home = find_shortest_path(current_node, home_node, adjacency_list, max_nodes=500)
     if not path_home:
         return None
 
@@ -195,23 +232,22 @@ def create_route(env, vehicle_id: str, order_ids: List[str], adjacency_list: Dic
 
 def solver(env) -> Dict:
     """
-    Main solver function - assigns multiple orders per vehicle.
+    Robust multi-order solver with fallback logic.
 
     Strategy:
-    1. Sort orders by size (largest first)
-    2. For each vehicle, pack as many orders as capacity allows
-    3. Optimize delivery sequence
-    4. Generate valid routes
+    1. Try to assign multiple orders per vehicle
+    2. If route creation fails, try with fewer orders
+    3. Use conservative limits based on vehicle type
+    4. Prioritize fulfillment over cost optimization
     """
     solution = {"routes": []}
 
-    # Get data
     order_ids = env.get_all_order_ids()
     vehicle_ids = env.get_available_vehicles()
     road_network = env.get_road_network_data()
     adjacency_list = road_network.get("adjacency_list", {})
 
-    # Sort orders by size (largest first to ensure they get vehicles)
+    # Sort orders by size
     orders_with_size = []
     for oid in order_ids:
         weight, volume = calculate_order_size(env, oid)
@@ -220,12 +256,9 @@ def solver(env) -> Dict:
     orders_with_size.sort(key=lambda x: x[1], reverse=True)
     sorted_orders = [oid for oid, _, _ in orders_with_size]
 
-    # Track assignments
     assigned = set()
 
-    # PASS 1: Multi-order assignment
-    used_vehicles = set()
-
+    # Process each vehicle
     for vehicle_id in vehicle_ids:
         if len(assigned) >= len(order_ids):
             break
@@ -234,95 +267,56 @@ def solver(env) -> Dict:
         if not vehicle:
             continue
 
-        # Conservative limits for best balance of fulfillment vs reliability
-        max_orders_per_vehicle = {
-            'LightVan': 3,
-            'MediumTruck': 4,
-            'HeavyTruck': 5
-        }.get(vehicle.type, 3)
+        # Max orders based on vehicle type - conservative
+        max_orders = {'LightVan': 3, 'MediumTruck': 4, 'HeavyTruck': 5}.get(vehicle.type, 3)
 
+        # Try to pack orders
         vehicle_orders = []
-
-        # Try to add orders
         for order_id in sorted_orders:
             if order_id in assigned:
                 continue
 
-            if len(vehicle_orders) >= max_orders_per_vehicle:
+            if len(vehicle_orders) >= max_orders:
                 break
 
             test_orders = vehicle_orders + [order_id]
-            if not can_fit_orders(env, vehicle_id, test_orders):
-                continue
-
-            if not check_warehouse_inventory(env, vehicle.home_warehouse_id, test_orders):
-                continue
-
-            vehicle_orders.append(order_id)
+            if can_fit_orders(env, vehicle_id, test_orders):
+                if check_inventory(env, vehicle.home_warehouse_id, test_orders):
+                    vehicle_orders.append(order_id)
 
         # Try to create route with fallback
-        if vehicle_orders:
-            route = None
+        route = None
+        attempts = [vehicle_orders, vehicle_orders[:len(vehicle_orders)//2], vehicle_orders[:1]]
 
-            # Try full list first
-            route = create_route(env, vehicle_id, vehicle_orders, adjacency_list)
-
-            # If failed, try with fewer orders
-            if not route and len(vehicle_orders) > 2:
-                route = create_route(env, vehicle_id, vehicle_orders[:len(vehicle_orders)//2], adjacency_list)
-                if route:
-                    vehicle_orders = vehicle_orders[:len(vehicle_orders)//2]
-
-            # Last resort: single order
-            if not route and len(vehicle_orders) > 0:
-                route = create_route(env, vehicle_id, [vehicle_orders[0]], adjacency_list)
-                if route:
-                    vehicle_orders = [vehicle_orders[0]]
-
-            if route:
-                solution['routes'].append(route)
-                assigned.update(vehicle_orders)
-                used_vehicles.add(vehicle_id)
-
-    # PASS 2: Mop up remaining orders with unused vehicles
-    remaining = [oid for oid in sorted_orders if oid not in assigned]
-
-    if remaining:
-        unused_vehicles = [vid for vid in vehicle_ids if vid not in used_vehicles]
-
-        for vehicle_id in unused_vehicles:
-            if not remaining:
-                break
-
-            vehicle = env.get_vehicle_by_id(vehicle_id)
-            if not vehicle:
+        for attempt_orders in attempts:
+            if not attempt_orders:
                 continue
 
-            # Try to fit 1-2 orders
-            for order_id in remaining[:]:
-                route = create_route(env, vehicle_id, [order_id], adjacency_list)
-                if route:
-                    solution['routes'].append(route)
-                    remaining.remove(order_id)
-                    assigned.add(order_id)
+            route = create_route(env, vehicle_id, attempt_orders, adjacency_list)
+            if route:
+                solution['routes'].append(route)
+                assigned.update(attempt_orders)
+                break
 
     return solution
 
 
-# # COMMENT OUT THIS SECTION WHEN SUBMITTING
+# # COMMENT OUT WHEN SUBMITTING
 # if __name__ == '__main__':
 #     from robin_logistics import LogisticsEnvironment
 #     env = LogisticsEnvironment()
 #     result = solver(env)
 #
-#     print(f"Routes created: {len(result['routes'])}")
-#
-#     # Validate
 #     is_valid, msg, details = env.validate_solution_complete(result)
 #     print(f"Valid: {is_valid}")
-#     print(f"Message: {msg}")
 #
 #     if is_valid:
+#         success, exec_msg = env.execute_solution(result)
+#         print(f"Execution: {exec_msg}")
+#
+#         fulfilled = sum(1 for oid in env.get_all_order_ids()
+#                        if all(qty == 0 for qty in env.get_order_fulfillment_status(oid).get('remaining', {}).values()))
+#
 #         stats = env.get_solution_statistics(result, details)
+#         print(f"Fulfilled: {fulfilled}/50")
 #         print(f"Cost: ${stats.get('total_cost', 0):,.2f}")
-#         print(f"Distance: {stats.get('total_distance', 0):,.2f} km")

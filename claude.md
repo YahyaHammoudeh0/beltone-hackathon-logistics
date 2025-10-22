@@ -334,3 +334,6 @@ print(f"Total Cost: {metrics['total_cost']}")
 - The environment automatically validates all solutions
 - Both dashboard and headless modes use identical validation logic
 - Reproducibility is supported via random seeds
+
+
+Run all terminals in background

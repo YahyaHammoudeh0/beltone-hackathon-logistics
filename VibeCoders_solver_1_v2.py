@@ -223,9 +223,7 @@ def solver(env) -> Dict:
     # Track assignments
     assigned = set()
 
-    # PASS 1: Multi-order assignment
-    used_vehicles = set()
-
+    # Assign orders to vehicles
     for vehicle_id in vehicle_ids:
         if len(assigned) >= len(order_ids):
             break
@@ -234,7 +232,8 @@ def solver(env) -> Dict:
         if not vehicle:
             continue
 
-        # Conservative limits for best balance of fulfillment vs reliability
+        # Limit orders per vehicle based on type to ensure route reliability
+        # Conservative limits to avoid route execution failures
         max_orders_per_vehicle = {
             'LightVan': 3,
             'MediumTruck': 4,
@@ -243,7 +242,7 @@ def solver(env) -> Dict:
 
         vehicle_orders = []
 
-        # Try to add orders
+        # Try to add orders to this vehicle
         for order_id in sorted_orders:
             if order_id in assigned:
                 continue
@@ -251,60 +250,23 @@ def solver(env) -> Dict:
             if len(vehicle_orders) >= max_orders_per_vehicle:
                 break
 
+            # Check if order fits
             test_orders = vehicle_orders + [order_id]
             if not can_fit_orders(env, vehicle_id, test_orders):
                 continue
 
+            # Check inventory
             if not check_warehouse_inventory(env, vehicle.home_warehouse_id, test_orders):
                 continue
 
             vehicle_orders.append(order_id)
 
-        # Try to create route with fallback
+        # Create route if orders assigned
         if vehicle_orders:
-            route = None
-
-            # Try full list first
             route = create_route(env, vehicle_id, vehicle_orders, adjacency_list)
-
-            # If failed, try with fewer orders
-            if not route and len(vehicle_orders) > 2:
-                route = create_route(env, vehicle_id, vehicle_orders[:len(vehicle_orders)//2], adjacency_list)
-                if route:
-                    vehicle_orders = vehicle_orders[:len(vehicle_orders)//2]
-
-            # Last resort: single order
-            if not route and len(vehicle_orders) > 0:
-                route = create_route(env, vehicle_id, [vehicle_orders[0]], adjacency_list)
-                if route:
-                    vehicle_orders = [vehicle_orders[0]]
-
             if route:
                 solution['routes'].append(route)
                 assigned.update(vehicle_orders)
-                used_vehicles.add(vehicle_id)
-
-    # PASS 2: Mop up remaining orders with unused vehicles
-    remaining = [oid for oid in sorted_orders if oid not in assigned]
-
-    if remaining:
-        unused_vehicles = [vid for vid in vehicle_ids if vid not in used_vehicles]
-
-        for vehicle_id in unused_vehicles:
-            if not remaining:
-                break
-
-            vehicle = env.get_vehicle_by_id(vehicle_id)
-            if not vehicle:
-                continue
-
-            # Try to fit 1-2 orders
-            for order_id in remaining[:]:
-                route = create_route(env, vehicle_id, [order_id], adjacency_list)
-                if route:
-                    solution['routes'].append(route)
-                    remaining.remove(order_id)
-                    assigned.add(order_id)
 
     return solution
 
